@@ -604,15 +604,37 @@
     const base = getBaseDomain(domain) || domain;
     const currentOwner = domainOwner.get(base);
     if (currentOwner === targetContainerId) return; // already correct
-    // Save current browser cookies to previous owner
+    // Save current browser cookies to previous owner (or to default if first time)
     if (currentOwner) {
       await saveCurrentCookiesToJar(currentOwner, domain);
-    } else if (targetContainerId !== DEFAULT_CONTAINER_COOKIE_ID) {
-      // If no owner yet, save default jar if needed (first time)
-      // Check if default has cookies and we are moving away from default
-      // We should not overwrite default jar yet, just track
+    } else {
+      // No previous owner tracked (fresh worker or first visit) -> browser cookies belong to default (العادي)
+      // Save them to default jar so المتصفح العادي لا يخرج من حسابه
+      try {
+        const existing = await getAllCookiesForDomain(domain);
+        if (existing.length) {
+          // Only save to default if we are moving away from default to a container
+          // Avoid overwriting default jar with container cookies (already handled above)
+          const defaultKey = getCookieJarKey(DEFAULT_CONTAINER_COOKIE_ID, domain);
+          const data = await g.browser.storage.local.get({ [defaultKey]: null });
+          if (!data[defaultKey] || data[defaultKey].length === 0) {
+            await saveCurrentCookiesToJar(DEFAULT_CONTAINER_COOKIE_ID, domain);
+            console.log(`Saved ${existing.length} cookies to default jar for ${base}`);
+          }
+        }
+      } catch(e){}
     }
-    // Restore target's jar
+    // Restore target's jar — but for default, if its jar empty we keep browser as is (لا نمسح العادي)
+    if (targetContainerId === DEFAULT_CONTAINER_COOKIE_ID) {
+      const defaultKey = getCookieJarKey(DEFAULT_CONTAINER_COOKIE_ID, domain);
+      let stored;
+      try { const d = await g.browser.storage.local.get(defaultKey); stored = d[defaultKey]; } catch(e){}
+      if (!stored || !stored.length) {
+        // Default has no saved jar yet (أول مرة) -> لا نمسح، خلّي كوكيز المتصفح العادي كما هي
+        domainOwner.set(base, targetContainerId);
+        return;
+      }
+    }
     await restoreCookiesFromJar(targetContainerId, domain);
     domainOwner.set(base, targetContainerId);
     // Also handle www. variant if needed? Already covered by domain matching
