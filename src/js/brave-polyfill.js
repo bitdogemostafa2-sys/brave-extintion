@@ -443,6 +443,135 @@
     }
   }
 
+  // Parse Set-Cookie string into object
+  function parseSetCookie(str) {
+    try {
+      const parts = str.split(";").map(s => s.trim());
+      const [nameValue, ...attrs] = parts;
+      const eq = nameValue.indexOf("=");
+      if (eq === -1) return null;
+      const name = nameValue.slice(0, eq).trim();
+      const value = nameValue.slice(eq+1).trim();
+      let domain = null, path = "/", secure = false, httpOnly = false, sameSite = "lax", expires = null;
+      for (const a of attrs) {
+        const [k,v] = a.split("=").map(s=> s.trim().toLowerCase());
+        if (k === "domain") domain = v;
+        else if (k === "path") path = v || "/";
+        else if (k === "secure") secure = true;
+        else if (k === "httponly") httpOnly = true;
+        else if (k === "samesite") sameSite = v || "lax";
+        else if (k === "expires") { try{ expires = new Date(v).getTime()/1000; }catch(e){} }
+        else if (k === "max-age") { try{ expires = Date.now()/1000 + parseInt(v,10); }catch(e){} }
+      }
+      return { name, value, domain, path, secure, httpOnly, sameSite, expirationDate: expires };
+    } catch(e){ return null; }
+  }
+
+  function cookieMatchesDomain(cookieDomain, requestDomain) {
+    if (!cookieDomain) return true;
+    const cd = cookieDomain.startsWith(".") ? cookieDomain.slice(1).toLowerCase() : cookieDomain.toLowerCase();
+    const rd = requestDomain.toLowerCase();
+    return rd === cd || rd.endsWith("."+cd);
+  }
+
+  async function getCookieHeaderForContainer(requestDomain, containerId) {
+    if (!requestDomain || !containerId) return null;
+    const key = getCookieJarKey(containerId, requestDomain);
+    let stored;
+    try {
+      const data = await g.browser.storage.local.get(key);
+      stored = data[key];
+    } catch(e){}
+    if (!stored || !stored.length) {
+      // Also try parent domain fallback .dutchycorp.space vs autofaucet.dutchycorp.space
+      // Search for any jar that matches this requestDomain ending
+      try {
+        const all = await g.browser.storage.local.get();
+        for (const k of Object.keys(all)) {
+          if (k.startsWith(COOKIE_JAR_PREFIX + containerId + "@@")) {
+            const jarDomain = k.slice((COOKIE_JAR_PREFIX + containerId + "@@").length);
+            if (cookieMatchesDomain(jarDomain, requestDomain) || cookieMatchesDomain(requestDomain, jarDomain)) {
+              stored = all[k];
+              if (stored && stored.length) break;
+            }
+          }
+        }
+      } catch(e){}
+    }
+    if (!stored || !stored.length) return "";
+    // Filter expired
+    const now = Date.now()/1000;
+    const valid = stored.filter(c => !c.expirationDate || c.expirationDate > now);
+    // For request, Cookie header is just name=value; ...
+    return valid.map(c => `${c.name}=${c.value}`).join("; ");
+  }
+
+  async function saveSetCookieToJar(setCookieValue, requestDomain, containerId) {
+    if (!setCookieValue || !requestDomain || !containerId) return;
+    const parsed = parseSetCookie(setCookieValue);
+    if (!parsed) return;
+    // If domain not in cookie, use requestDomain
+    if (!parsed.domain) parsed.domain = requestDomain;
+    const key = getCookieJarKey(containerId, parsed.domain);
+    let stored;
+    try {
+      const data = await g.browser.storage.local.get({ [key]: [] });
+      stored = data[key] || [];
+    } catch(e){ stored = []; }
+    // Remove existing same name+domain+path
+    stored = stored.filter(c => !(c.name === parsed.name && c.domain === parsed.domain && c.path === parsed.path));
+    // If value empty and expires in past, treat as deletion - don't add
+    if (parsed.value === "" && parsed.expirationDate && parsed.expirationDate < Date.now()/1000) {
+      // just removed
+    } else {
+      stored.push(parsed);
+    }
+    try { await g.browser.storage.local.set({ [key]: stored }); } catch(e){}
+    // Also store under requestDomain for fallback lookup
+    if (parsed.domain !== requestDomain) {
+      const key2 = getCookieJarKey(containerId, requestDomain);
+      try {
+        const data2 = await g.browser.storage.local.get({ [key2]: [] });
+        let stored2 = data2[key2] || [];
+        stored2 = stored2.filter(c => !(c.name === parsed.name && c.domain === parsed.domain && c.path === parsed.path));
+        if (!(parsed.value === "" && parsed.expirationDate && parsed.expirationDate < Date.now()/1000)) stored2.push(parsed);
+        await g.browser.storage.local.set({ [key2]: stored2 });
+      } catch(e){}
+    }
+  }
+
+  function installHeaderCookieIsolation() {
+    try {
+      const wr = (g.browser.webRequest || g.chrome.webRequest);
+      if (!wr || !wr.onHeadersReceived) return;
+      // Observer only - saves Set-Cookie per container to virtual jar
+      // No blocking needed, works in MV3
+      try {
+        wr.onHeadersReceived.addListener(async (details) => {
+          try {
+            if (details.tabId === -1) return;
+            const url = details.url || details.initiator || details.documentUrl || "";
+            let domain = getDomainFromUrl(url);
+            if (!domain && details.url) {
+              try { domain = new URL(details.url).hostname; } catch(e){}
+            }
+            if (!domain) return;
+            const containerId = await getTabContainer(details.tabId);
+            if (!containerId || containerId === DEFAULT_CONTAINER_COOKIE_ID) return;
+            const headers = details.responseHeaders || [];
+            if (!headers || !headers.length) return;
+            for (const h of headers) {
+              if (h.name && h.name.toLowerCase() === "set-cookie" && h.value) {
+                await saveSetCookieToJar(h.value, domain, containerId);
+              }
+            }
+          } catch(e){}
+        }, { urls: ["<all_urls>"] }, ["responseHeaders", "extraHeaders"]);
+        console.log("Header Cookie observer installed (Set-Cookie capture)");
+      } catch(e) { console.log("Header observer not available", e.message); }
+    } catch(e){}
+  }
+
   async function swapCookiesForNavigation(tabId, url, targetContainerId) {
     if (!cookieIsolationEnabled) return;
     const domain = getDomainFromUrl(url);
@@ -481,18 +610,31 @@
       });
     }
 
-    // On navigation committed, swap before page loads
+    // On navigation committed/beforeNavigate, swap before page loads (earliest)
     const webNav = g.browser.webNavigation || g.chrome.webNavigation;
-    if (webNav && webNav.onCommitted) {
-      webNav.onCommitted.addListener(async (details) => {
-        if (details.frameId !== 0) return;
-        try {
-          const containerId = await getTabContainer(details.tabId);
-          await swapCookiesForNavigation(details.tabId, details.url, containerId);
-        } catch(e) {}
-      });
-    } else if (tabsApi.onUpdated) {
+    if (webNav) {
+      if (webNav.onBeforeNavigate) {
+        webNav.onBeforeNavigate.addListener(async (details) => {
+          if (details.frameId !== 0) return;
+          try {
+            const containerId = await getTabContainer(details.tabId);
+            await swapCookiesForNavigation(details.tabId, details.url, containerId);
+          } catch(e) {}
+        });
+      }
+      if (webNav.onCommitted) {
+        webNav.onCommitted.addListener(async (details) => {
+          if (details.frameId !== 0) return;
+          try {
+            const containerId = await getTabContainer(details.tabId);
+            await swapCookiesForNavigation(details.tabId, details.url, containerId);
+          } catch(e) {}
+        });
+      }
+    }
+    if (!webNav || (!webNav.onCommitted && !webNav.onBeforeNavigate)) {
       // Fallback: use tabs.onUpdated if webNavigation not available
+      if (tabsApi.onUpdated) {
       tabsApi.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         if (!changeInfo.url) return;
         try {
@@ -500,6 +642,7 @@
           await swapCookiesForNavigation(tabId, changeInfo.url, containerId);
         } catch(e){}
       });
+      }
     }
 
     // On tab close, optionally persist its container's cookies for its domain
@@ -508,6 +651,9 @@
     }
 
     console.log("Brave Cookie Isolation installed");
+
+    // Also install header-based isolation for simultaneous tabs (no global cookie swap needed)
+    try { installHeaderCookieIsolation(); } catch(e) { console.error("Header isolation failed", e); }
 
     // Upgrade to fingerprint isolation on same hooks - delegate to fingerprint manager
     try { installFingerprintIsolation(); } catch(e) { console.error("Fingerprint isolation install failed", e); }
