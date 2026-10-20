@@ -999,6 +999,27 @@ Logic.registerPanel(P_CONTAINER_INFO, {
         Logic.showPanel(P_CLEAR_CONTAINER_STORAGE, identity);
       }
     });
+    // زر إعادة تعيين التاب الحالي (كوكيز+History كأن جديد) - يظهر جنب الإضافة
+    const resetCurrentTabBtn = document.getElementById("reset-current-tab-storage");
+    if (resetCurrentTabBtn) {
+      Utils.addEnterHandler(resetCurrentTabBtn, async () => {
+        const tabs = await browser.tabs.query({ active: true, currentWindow: true }).catch(()=>[]);
+        const curTab = tabs[0];
+        if (!curTab) return;
+        const csId = identity.cookieStoreId;
+        const userContextId = Utils.userContextId(csId);
+        if (!userContextId) return;
+        // تأكيد سريع
+        if (!confirm(`إعادة تعيين بيانات ${identity.name} لهذا التاب؟\nسيتم مسح الكوكيز و History و localStorage كأن المتصفح جديد (مع الحفاظ على بصمة PC)`)) return;
+        try {
+          await browser.runtime.sendMessage({ method: "resetSingleTabContainer", tabId: curTab.id, userContextId });
+          Logic.notify({messageId: "storageWasClearedConfirmation", placeholders: [identity.name]});
+          // إعادة تحميل التاب
+          try { await browser.tabs.reload(curTab.id); } catch(e){}
+          window.close();
+        } catch(e) { console.error(e); }
+      });
+    }
     return this.buildOpenTabTable(tabs);
   },
 
@@ -1049,7 +1070,8 @@ Logic.registerPanel(P_CONTAINER_INFO, {
         <td>
           <div class="favicon"></div>
           <span title="${tab.url}" class="menu-text truncate-text">${tab.title}</span>
-          <img id="${tab.id}" class="trash-button" src="/img/close.svg" />
+          <img data-tabid="${tab.id}" class="reset-button" src="/img/refresh-16.svg" title="إعادة تعيين: مسح كوكيز+History كأن جديد" />
+          <img id="${tab.id}" class="trash-button" src="/img/close.svg" title="إغلاق التاب" />
         </td>`;
       tr.querySelector(".favicon").appendChild(Utils.createFavIconElement(tab.favIconUrl));
       tr.setAttribute("tabindex", "0");
@@ -1065,8 +1087,29 @@ Logic.registerPanel(P_CONTAINER_INFO, {
         const closeTab = tr.querySelector(".trash-button");
         if (closeTab) {
           Utils.addEnterHandler(closeTab, async (e) => {
+            e.stopPropagation();
             await browser.tabs.remove(Number(e.target.id));
             window.close();
+          });
+        }
+        // زر إعادة التعيين جنب كل تاب (كوكيز+History كأن المتصفح بدأ من الأول)
+        const resetBtn = tr.querySelector(".reset-button");
+        if (resetBtn) {
+          Utils.addEnterHandler(resetBtn, async (e) => {
+            e.stopPropagation();
+            const tabId = Number(resetBtn.getAttribute("data-tabid") || e.target.getAttribute("data-tabid"));
+            const identity = Logic.currentIdentity();
+            const userContextId = Utils.userContextId(identity.cookieStoreId);
+            if (!tabId || !userContextId) return;
+            if (!confirm(`إعادة تعيين هذا التاب؟\nسيتم مسح كوكيز + localStorage + cache + History لهذه الحاوية كأنها جديدة (مع الحفاظ على بصمة PC)`)) return;
+            try {
+              await browser.runtime.sendMessage({ method: "resetSingleTabContainer", tabId, userContextId });
+              try { await browser.history.deleteUrl({ url: tab.url }); } catch(err){}
+              try { await browser.tabs.reload(tabId); } catch(err){}
+              // إشعار
+              Logic.notify({messageId: "storageWasClearedConfirmation", placeholders: [identity.name]});
+              setTimeout(()=>window.close(), 400);
+            } catch(err) { console.error(err); }
           });
         }
       }

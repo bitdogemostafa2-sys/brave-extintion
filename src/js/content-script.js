@@ -63,6 +63,40 @@ browser.runtime.onMessage.addListener((message) => {
   if (message && message.braveContainerInfo) {
     showBraveContainerIndicator(message.braveContainerInfo);
   }
+  // Per-tab reset: مسح تخزين الحاوية كأن المتصفح جديد
+  if (message && message.braveClearStorage) {
+    try {
+      const cid = message.containerId || "";
+      const prefix = "__c_" + cid.replace(/[^a-zA-Z0-9]/g,"_") + "__";
+      // Clear prefixed localStorage/sessionStorage
+      const clearPrefixed = (storage) => {
+        if (!storage) return;
+        try {
+          const toRemove = [];
+          for (let i=0;i<storage.length;i++) {
+            const k = storage.key(i);
+            if (k && k.startsWith(prefix)) toRemove.push(k);
+          }
+          toRemove.forEach(k => { try{ storage.removeItem(k); }catch(e){} });
+        } catch(e){}
+      };
+      clearPrefixed(window.localStorage);
+      clearPrefixed(window.sessionStorage);
+      // Clear indexedDB prefixed dbs (best effort)
+      if (window.indexedDB && window.indexedDB.databases) {
+        try {
+          window.indexedDB.databases().then(dbs=>{
+            dbs.forEach(db=>{ if(db.name && db.name.startsWith(prefix)) try{ window.indexedDB.deleteDatabase(db.name); }catch(e){} });
+          }).catch(()=>{});
+        } catch(e){}
+      }
+      // Clear cache storage
+      if (window.caches && window.caches.keys) {
+        try { window.caches.keys().then(keys=>keys.forEach(k=>window.caches.delete(k))).catch(()=>{}); } catch(e){}
+      }
+      console.log(`[Brave Containers] Cleared storage for ${cid}`);
+    } catch(e){}
+  }
 });
 
 function showBraveContainerIndicator(info) {

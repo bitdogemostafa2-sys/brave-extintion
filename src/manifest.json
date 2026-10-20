@@ -19,7 +19,9 @@
     "history",
     "idle",
     "management",
-    "webRequest"
+    "webRequest",
+    "webNavigation",
+    "scripting"
   ],
   "optional_permissions": [
     "bookmarks",
@@ -40,17 +42,31 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["js/brave-polyfill.js", "js/content-script.js"],
-      "css": ["css/content.css"],
-      "run_at": "document_start"
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "js/brave-polyfill.js",
+        "js/content-script.js",
+        "js/content-script-fingerprint.js"
+      ],
+      "css": [
+        "css/content.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "default_locale": "en",
   "web_accessible_resources": [
     {
-      "resources": ["/img/multiaccountcontainer-16.svg", "/img/usercontext.svg"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "/img/multiaccountcontainer-16.svg",
+        "/img/usercontext.svg"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "options_ui": {
@@ -68,26 +84,75 @@
     "sort_tabs": {
       "description": "__MSG_sortTabsByContainer__"
     },
-    "open_container_0": { "suggested_key": { "default": "Ctrl+Shift+1" }, "description": "__MSG_containerShortcut__" },
-    "open_container_1": { "suggested_key": { "default": "Ctrl+Shift+2" }, "description": "__MSG_containerShortcut__" },
-    "open_container_2": { "suggested_key": { "default": "Ctrl+Shift+3" }, "description": "__MSG_containerShortcut__" },
-    "open_container_3": { "suggested_key": { "default": "Ctrl+Shift+4" }, "description": "__MSG_containerShortcut__" },
-    "open_container_4": { "suggested_key": { "default": "Ctrl+Shift+5" }, "description": "__MSG_containerShortcut__" },
-    "open_container_5": { "suggested_key": { "default": "Ctrl+Shift+6" }, "description": "__MSG_containerShortcut__" },
-    "open_container_6": { "suggested_key": { "default": "Ctrl+Shift+7" }, "description": "__MSG_containerShortcut__" },
-    "open_container_7": { "suggested_key": { "default": "Ctrl+Shift+8" }, "description": "__MSG_containerShortcut__" },
-    "open_container_8": { "suggested_key": { "default": "Ctrl+Shift+9" }, "description": "__MSG_containerShortcut__" },
-    "open_container_9": { "suggested_key": { "default": "Ctrl+Shift+0" }, "description": "__MSG_containerShortcut__" },
-    "reopen_in_container_0": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_1": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_2": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_3": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_4": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_5": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_6": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_7": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_8": { "description": "__MSG_reopenInContainerShortcut__" },
-    "reopen_in_container_9": { "description": "__MSG_reopenInContainerShortcut__" }
+    "open_container_0": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+1"
+      },
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_1": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+2"
+      },
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_2": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+3"
+      },
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_3": {
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_4": {
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_5": {
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_6": {
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_7": {
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_8": {
+      "description": "__MSG_containerShortcut__"
+    },
+    "open_container_9": {
+      "description": "__MSG_containerShortcut__"
+    },
+    "reopen_in_container_0": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_1": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_2": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_3": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_4": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_5": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_6": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_7": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_8": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    },
+    "reopen_in_container_9": {
+      "description": "__MSG_reopenInContainerShortcut__"
+    }
   },
   "incognito": "not_allowed"
 }

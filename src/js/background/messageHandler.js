@@ -78,6 +78,9 @@ const messageHandler = {
           windowId: m.windowId
         });
         break;
+      case "resetSingleTabContainer":
+        response = backgroundLogic.resetSingleTabContainer(m.tabId, m.userContextId);
+        break;
       case "queryIdentitiesState":
         response = backgroundLogic.queryIdentitiesState(m.message.windowId);
         break;
