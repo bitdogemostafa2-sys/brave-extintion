@@ -508,6 +508,245 @@
     }
 
     console.log("Brave Cookie Isolation installed");
+
+    // Upgrade to fingerprint isolation on same hooks - delegate to fingerprint manager
+    try { installFingerprintIsolation(); } catch(e) { console.error("Fingerprint isolation install failed", e); }
+  }
+
+  // --- Fingerprint Isolation (PC-only, persistent, strongest) ---
+  // Each container gets a persistent desktop fingerprint (Windows/macOS/Linux only)
+  // Injected into MAIN world before any site/extension script via scripting API
+  function injectFingerprintInMainWorld(fp, containerId) {
+    // This function is serialized and executed in MAIN world - must be self-contained
+    // Duplicate of logic in content-script-fingerprint.js for scripting API path
+    if (!fp) return;
+    try {
+      const cid = containerId || fp.containerId || "default";
+      const navProps = {
+        userAgent: fp.ua,
+        appVersion: fp.ua,
+        platform: fp.platform,
+        vendor: fp.vendor,
+        hardwareConcurrency: fp.cpu,
+        deviceMemory: fp.memory,
+        language: fp.locale,
+        webdriver: false
+      };
+      // languages array
+      try { navProps.languages = fp.lang ? fp.lang.split(",").map(s => s.split(";")[0].trim()) : [fp.locale]; } catch(e) {}
+      function spoof(obj, prop, value) {
+        try { Object.defineProperty(obj, prop, { get(){return value;}, configurable:true }); } catch(e){}
+      }
+      try {
+        const nav = window.navigator;
+        for (const k of Object.keys(navProps)) spoof(nav, k, navProps[k]);
+        spoof(nav, "oscpu", fp.ua.includes("Windows") ? "Windows NT 10.0; Win64; x64" : (fp.platform==="MacIntel" ? "Intel Mac OS X 10_15_7" : "X11; Linux x86_64"));
+        if (fp.secChUa) {
+          const ch = { brands:[{brand:"Chromium",version:fp.browserVersion.split(".")[0]},{brand: fp.browser==="Brave"?"Brave":fp.browser==="Edge"?"Microsoft Edge":"Google Chrome",version:fp.browserVersion.split(".")[0]},{brand:"Not-A.Brand",version:"99"}], mobile:false, platform: fp.os==="Windows"?"Windows":(fp.os.includes("Mac")?"macOS":"Linux"), getHighEntropyValues: async()=>({platform:fp.os, platformVersion:fp.osVersion, architecture:"x86",bitness:"64",model:"",uaFullVersion:fp.browserVersion}) };
+          spoof(nav, "userAgentData", ch);
+        }
+        const fakePlugins = { length:5, 0:{name:"PDF Viewer"},1:{name:"Chrome PDF Viewer"},2:{name:"Chromium PDF Viewer"},3:{name:"Microsoft Edge PDF Viewer"},4:{name:"WebKit built-in PDF"}, item:function(i){return this[i];}, namedItem:function(n){for(let i=0;i<this.length;i++) if(this[i].name===n) return this[i]; return null;} };
+        spoof(nav, "plugins", fakePlugins);
+        const fakeMimeTypes = { length:2, 0:{type:"application/pdf"},1:{type:"text/pdf"}, item:function(i){return this[i];}, namedItem:function(n){return this[n];}};
+        spoof(nav, "mimeTypes", fakeMimeTypes);
+      } catch(e){}
+      try {
+        const dims = fp.screen.split("x").map(Number);
+        const w=dims[0],h=dims[1];
+        const scr=window.screen;
+        spoof(scr,"width",w); spoof(scr,"height",h); spoof(scr,"availWidth",w); spoof(scr,"availHeight",h-40); spoof(scr,"colorDepth",fp.colorDepth); spoof(scr,"pixelDepth",fp.colorDepth);
+        spoof(window,"devicePixelRatio",fp.pixelRatio||1); spoof(window,"outerWidth",w); spoof(window,"outerHeight",h); spoof(window,"innerWidth",w); spoof(window,"innerHeight",h-80);
+      } catch(e){}
+      try {
+        const seed = typeof fp.canvasSeed==="number" ? fp.canvasSeed : 0.5;
+        const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+        const origToBlob = HTMLCanvasElement.prototype.toBlob;
+        function addNoiseToCanvas(canvas){ try{ const ctx=canvas.getContext("2d"); if(!ctx) return; const w=canvas.width,h=canvas.height; if(w===0||h===0||w>4096||h>4096) return; if(canvas.__braveNoiseApplied) return; canvas.__braveNoiseApplied=true; try{ const imageData=ctx.getImageData(0,0,w,h); const data=imageData.data; let s=Math.floor(seed*1000000); for(let i=0;i<data.length;i+=4){ if(i%400===0){ s=(s*1664525+1013904223)>>>0; const noise=(s%3)-1; data[i]=Math.max(0,Math.min(255,data[i]+noise)); data[i+1]=Math.max(0,Math.min(255,data[i+1]+noise)); data[i+2]=Math.max(0,Math.min(255,data[i+2]+noise)); } } ctx.putImageData(imageData,0,0);}catch(e){} }catch(e){} }
+        HTMLCanvasElement.prototype.toDataURL=function(){ try{addNoiseToCanvas(this);}catch(e){} return origToDataURL.apply(this, arguments); };
+        HTMLCanvasElement.prototype.toBlob=function(){ try{addNoiseToCanvas(this);}catch(e){} return origToBlob.apply(this, arguments); };
+      } catch(e){}
+      try {
+        const renderer = fp.renderer || "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0)";
+        const vendorStr = renderer.includes("Apple") ? "Apple Inc." : (renderer.includes("Intel") ? "Intel" : (renderer.includes("NVIDIA") ? "Google Inc. (NVIDIA)" : "Google Inc."));
+        const origGetParam = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function(pname){ if(pname===37445) return vendorStr; if(pname===37446) return renderer; return origGetParam.apply(this, arguments); };
+        if(typeof WebGL2RenderingContext!=="undefined"){ const origGetParam2=WebGL2RenderingContext.prototype.getParameter; WebGL2RenderingContext.prototype.getParameter=function(pname){ if(pname===37445) return vendorStr; if(pname===37446) return renderer; return origGetParam2.apply(this, arguments); }; }
+      } catch(e){}
+      try {
+        const audioSeed = typeof fp.audioSeed==="number" ? fp.audioSeed : 0.3;
+        if(window.AudioBuffer){ const origGetChannelData=AudioBuffer.prototype.getChannelData; AudioBuffer.prototype.getChannelData=function(){ const data=origGetChannelData.apply(this, arguments); try{ let s=Math.floor(audioSeed*1000000); for(let i=0;i<Math.min(data.length,5000);i+=100){ s=(s*1664525+1013904223)>>>0; data[i]+=((s%200)-100)/10000000; } }catch(e){} return data; }; }
+      } catch(e){}
+      try {
+        const tzOffsets={"America/New_York":300,"America/Los_Angeles":480,"America/Chicago":360,"America/Denver":420,"America/Vancouver":480,"America/Mexico_City":360,"America/Sao_Paulo":180,"Europe/London":0,"Europe/Berlin":-60,"Europe/Paris":-60,"Europe/Rome":-60,"Europe/Madrid":-60,"Europe/Amsterdam":-60,"Europe/Stockholm":-60,"Europe/Warsaw":-60,"Europe/Athens":-120,"Europe/Moscow":-180,"Europe/Istanbul":-180,"Europe/Oslo":-60,"Europe/Copenhagen":-60,"Asia/Tokyo":-540,"Asia/Shanghai":-480,"Asia/Dubai":-240,"Asia/Seoul":-540,"Australia/Sydney":-660};
+        const offset = tzOffsets[fp.timezone]!==undefined ? tzOffsets[fp.timezone] : new Date().getTimezoneOffset();
+        Date.prototype.getTimezoneOffset=function(){ return offset; };
+        try{ const origResolved=Intl.DateTimeFormat.prototype.resolvedOptions; Intl.DateTimeFormat.prototype.resolvedOptions=function(){ const res=origResolved.apply(this, arguments); res.timeZone=fp.timezone; res.locale=fp.locale; return res; }; }catch(e){}
+      } catch(e){}
+      try{ if(navigator.permissions && navigator.permissions.query){ const origQuery=navigator.permissions.query.bind(navigator.permissions); navigator.permissions.query=function(params){ if(params && params.name==="notifications") return Promise.resolve({state:"denied",onchange:null}); return origQuery(params); }; } }catch(e){}
+      try{
+        const prefix="__c_"+cid.replace(/[^a-zA-Z0-9]/g,"_")+"__";
+        if(cid!=="firefox-default" && cid!=="0"){
+          const wrapStorage=(storage)=>{ if(!storage||storage.__braveWrapped) return; const origGetItem=storage.getItem.bind(storage); const origSetItem=storage.setItem.bind(storage); const origRemoveItem=storage.removeItem.bind(storage); const origClear=storage.clear.bind(storage); const origKey=storage.key?storage.key.bind(storage):null; storage.getItem=function(k){return origGetItem(prefix+k);}; storage.setItem=function(k,v){return origSetItem(prefix+k,v);}; storage.removeItem=function(k){return origRemoveItem(prefix+k);}; storage.clear=function(){ try{ const toRemove=[]; for(let i=0;i<storage.length;i++){ const key=origKey(i); if(key&&key.startsWith(prefix)) toRemove.push(key); } toRemove.forEach(k=>origRemoveItem(k)); }catch(e){ return origClear(); } }; if(origKey){ storage.key=function(n){ let count=-1; for(let i=0;i<storage.length;i++){ const k=origKey(i); if(k&&k.startsWith(prefix)){ count++; if(count===n) return k.substring(prefix.length); } } return null; }; } Object.defineProperty(storage,"length",{ get(){ let c=0; for(let i=0;i<storage.length;i++){ const k=origKey(i); if(k&&k.startsWith(prefix)) c++; } return c; }, configurable:true }); storage.__braveWrapped=true; };
+          wrapStorage(window.localStorage); wrapStorage(window.sessionStorage);
+          if(window.indexedDB && window.indexedDB.open){ const origOpen=window.indexedDB.open.bind(window.indexedDB); const origDelete=window.indexedDB.deleteDatabase?window.indexedDB.deleteDatabase.bind(window.indexedDB):null; window.indexedDB.open=function(name,version){ if(typeof name==="string") name=prefix+name; return origOpen(name,version); }; if(origDelete) window.indexedDB.deleteDatabase=function(name){ if(typeof name==="string") name=prefix+name; return origDelete(name); }; }
+        }
+      }catch(e){}
+      try{ Object.defineProperty(window,"__braveContainerFingerprint",{value:fp.deviceId,configurable:true,enumerable:false}); }catch(e){}
+    } catch(e) {}
+  }
+
+  async function getFingerprintForContainer(containerId) {
+    if (!containerId || containerId==="firefox-default" || containerId==="0") return null;
+    try {
+      // Prefer ContainerVault if loaded
+      if (g.ContainerVault && g.ContainerVault.getFingerprint) {
+        return await g.ContainerVault.getFingerprint(containerId);
+      }
+      if (g.FingerprintEngine && g.FingerprintEngine.generateFingerprint) {
+        return g.FingerprintEngine.generateFingerprint(containerId);
+      }
+    } catch(e){}
+    return null;
+  }
+
+  async function injectFingerprintForTab(tabId, containerId, url) {
+    if (!containerId || containerId==="firefox-default") return;
+    // Avoid injecting into extension/internal pages
+    if (!url || url.startsWith("chrome") || url.startsWith("brave") || url.startsWith("about") || url.startsWith("chrome-extension") || url.startsWith("moz-extension")) return;
+    if (url.startsWith("chrome://") || url.startsWith("brave://") || url.startsWith("edge://") || url.startsWith("about:")) return;
+    const fp = await getFingerprintForContainer(containerId);
+    if (!fp) return;
+    // Try chrome.scripting API (preferred - runs in MAIN world before page scripts with injectImmediately)
+    try {
+      if (g.chrome && g.chrome.scripting && g.chrome.scripting.executeScript) {
+        await g.chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          func: injectFingerprintInMainWorld,
+          args: [fp, containerId],
+          injectImmediately: true,
+          world: "MAIN"
+        });
+        return;
+      }
+    } catch(e) {
+      // Fallback to browser.scripting
+      try {
+        if (g.browser && g.browser.scripting && g.browser.scripting.executeScript) {
+          await g.browser.scripting.executeScript({
+            target: { tabId: tabId },
+            func: injectFingerprintInMainWorld,
+            args: [fp, containerId],
+            injectImmediately: true,
+            world: "MAIN"
+          });
+          return;
+        }
+      } catch(e2){}
+    }
+    // Final fallback: send message to content script to inject via DOM
+    try {
+      if (g.browser && g.browser.tabs && g.browser.tabs.sendMessage) {
+        g.browser.tabs.sendMessage(tabId, { braveFingerprint: fp }).catch(()=>{});
+      } else if (g.chrome && g.chrome.tabs && g.chrome.tabs.sendMessage) {
+        g.chrome.tabs.sendMessage(tabId, { braveFingerprint: fp }, ()=>{});
+      }
+    } catch(e){}
+  }
+
+  function installFingerprintIsolation() {
+    // Ensure fingerprints are created for existing containers
+    (async () => {
+      try {
+        const containers = await loadContainers();
+        for (const c of containers) {
+          try { await getFingerprintForContainer(c.cookieStoreId); } catch(e){}
+        }
+      } catch(e){}
+    })();
+
+    // Hook container lifecycle to manage vault
+    contextualIdentitiesPolyfill.onCreated && contextualIdentitiesPolyfill.onCreated.addListener && contextualIdentitiesPolyfill.onCreated.addListener(async (detail) => {
+      try { const ci = detail.contextualIdentity || detail; if (ci && ci.cookieStoreId) await getFingerprintForContainer(ci.cookieStoreId); } catch(e){}
+    });
+
+    // On remove, clean vault
+    const origRemove = contextualIdentitiesPolyfill.remove.bind(contextualIdentitiesPolyfill);
+    contextualIdentitiesPolyfill.remove = async function(cookieStoreId) {
+      const res = await origRemove(cookieStoreId);
+      try {
+        if (g.ContainerVault && g.ContainerVault.removeFingerprint) await g.ContainerVault.removeFingerprint(cookieStoreId);
+        else if (g.browser && g.browser.storage && g.browser.storage.local) {
+          const key = `pcFingerprint@@_${String(cookieStoreId).replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+          await g.browser.storage.local.remove(key);
+        }
+      } catch(e){}
+      return res;
+    };
+
+    // Message handler for content script to fetch its container's fingerprint
+    try {
+      const runtime = g.browser.runtime || g.chrome.runtime;
+      if (runtime && runtime.onMessage) {
+        runtime.onMessage.addListener((message, sender, sendResponse) => {
+          if (!message || !message.method) return false;
+          if (message.method === "braveGetFingerprint") {
+            (async () => {
+              try {
+                const tabId = sender && sender.tab ? sender.tab.id : null;
+                if (tabId == null) { sendResponse(null); return; }
+                const containerId = await getTabContainer(tabId);
+                const fp = await getFingerprintForContainer(containerId);
+                sendResponse(fp || null);
+              } catch(e) { sendResponse(null); }
+            })();
+            return true; // async response
+          }
+          if (message.method === "braveGetContainerId") {
+            (async () => {
+              try {
+                const tabId = sender && sender.tab ? sender.tab.id : null;
+                if (tabId == null) { sendResponse(null); return; }
+                const containerId = await getTabContainer(tabId);
+                sendResponse({ containerId });
+              } catch(e){ sendResponse(null); }
+            })();
+            return true;
+          }
+          return false;
+        });
+      }
+    } catch(e){}
+
+    // Inject on navigation - stronger isolation
+    const webNav = g.browser.webNavigation || (g.chrome && g.chrome.webNavigation);
+    if (webNav && webNav.onCommitted) {
+      webNav.onCommitted.addListener(async (details) => {
+        if (details.frameId !== 0) return;
+        try {
+          const containerId = await getTabContainer(details.tabId);
+          await swapCookiesForNavigation(details.tabId, details.url, containerId);
+          await injectFingerprintForTab(details.tabId, containerId, details.url);
+        } catch(e){}
+      });
+    }
+    // Also inject on tab activation (for bfcache / history)
+    try {
+      const tabsApi = g.browser.tabs || g.chrome.tabs;
+      if (tabsApi && tabsApi.onActivated) {
+        // Already has handler for cookies, add fingerprint re-inject
+        // We patch by adding second listener
+        tabsApi.onActivated.addListener(async (activeInfo) => {
+          try {
+            const tab = await tabsApi.get(activeInfo.tabId);
+            if (!tab || !tab.url) return;
+            const containerId = await getTabContainer(tab.id);
+            await injectFingerprintForTab(tab.id, containerId, tab.url);
+          } catch(e){}
+        });
+      }
+    } catch(e){}
+
+    console.log("Brave Fingerprint Isolation (PC 500 persistent) installed");
   }
 
   // Install tabs wrappers

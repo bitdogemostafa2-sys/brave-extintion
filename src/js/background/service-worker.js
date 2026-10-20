@@ -4,6 +4,8 @@
 
 var window = self;
 var document = { addEventListener: () => {}, createElement: () => ({}) };
+importScripts("../fingerprint-engine.js");
+importScripts("../container-vault.js");
 importScripts("../brave-polyfill.js");
 importScripts("../utils.js");
 importScripts("../containerStyle.js");

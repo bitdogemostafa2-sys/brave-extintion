@@ -19,7 +19,9 @@
     "history",
     "idle",
     "management",
-    "webRequest"
+    "webRequest",
+    "webNavigation",
+    "scripting"
   ],
   "optional_permissions": [
     "bookmarks",
@@ -45,12 +47,14 @@
       ],
       "js": [
         "js/brave-polyfill.js",
-        "js/content-script.js"
+        "js/content-script.js",
+        "js/content-script-fingerprint.js"
       ],
       "css": [
         "css/content.css"
       ],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "default_locale": "en",
