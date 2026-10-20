@@ -395,6 +395,37 @@
   setTimeout(tryInject, 50);
   setTimeout(tryInject, 300);
 
+  // Listen for braveClearStorage to clear prefixed storage for reset
+  try {
+    g.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.braveClearStorage) {
+        try {
+          const cid = msg.containerId || "";
+          const prefix = "__c_" + cid.replace(/[^a-zA-Z0-9]/g,"_") + "__";
+          const clearPrefixed = (storage) => {
+            if (!storage || storage.__braveCleared) return;
+            try {
+              const toRemove = [];
+              for (let i=0;i<storage.length;i++) {
+                const k = storage.key(i);
+                if (k && k.startsWith(prefix)) toRemove.push(k);
+              }
+              toRemove.forEach(k=>{ try{ storage.removeItem(k); }catch(e){} });
+            } catch(e){}
+          };
+          // Note: localStorage already wrapped to use prefix, so clear will remove only this container's keys
+          // But we are in ISOLATED world, need to send to MAIN world via injected script
+          try {
+            const s = document.createElement("script");
+            s.textContent = `(() => { try { const p="${prefix}"; const c=(s)=>{ try{ const tr=[]; for(let i=0;i<s.length;i++){ const k=s.key(i); if(k&&k.startsWith(p)) tr.push(k);} tr.forEach(k=>s.removeItem(k)); }catch(e){} }; c(localStorage); c(sessionStorage); if(caches&&caches.keys) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))).catch(()=>{}); } catch(e){} })()`;
+            (document.documentElement||document.head).appendChild(s);
+            setTimeout(()=>{ try{ s.remove(); }catch(e){} },100);
+          } catch(e){}
+        } catch(e){}
+      }
+    });
+  } catch(e){}
+
   // Listen for push from background (if background sends fingerprint via message)
   try {
     g.runtime.onMessage.addListener((msg) => {

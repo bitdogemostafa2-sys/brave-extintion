@@ -468,6 +468,50 @@
     }
   }
 
+  // --- Reset container per-tab (كوكيز + History + localStorage/cache كأن المتصفح جديد) ---
+  async function clearContainerAllData(containerId) {
+    if (!containerId) return;
+    try {
+      const all = await g.browser.storage.local.get();
+      const keysToRemove = [];
+      for (const k of Object.keys(all)) {
+        if (k.startsWith(COOKIE_JAR_PREFIX + containerId + "@@")) {
+          keysToRemove.push(k);
+        }
+        // Keep pcFingerprint@@_ (بصمة PC ثابتة) - لا نمسحها في full_reset العادي
+        // لو عايز مسح شامل مع بصمة، استخدم clearContainerWithFingerprint
+      }
+      if (keysToRemove.length) {
+        await g.browser.storage.local.remove(keysToRemove);
+        console.log(`Cleared ${keysToRemove.length} cookie jars for ${containerId}`);
+      }
+      // Clear domainOwner entries owned by this container
+      for (const [domain, owner] of domainOwner.entries()) {
+        if (owner === containerId) domainOwner.delete(domain);
+      }
+      // Also clear real browser cookies that currently belong to this container's domains
+      // We can't know all domains, but we clear for domains we just removed
+      for (const key of keysToRemove) {
+        const domain = key.slice((COOKIE_JAR_PREFIX + containerId + "@@").length);
+        try { await clearCookiesForDomain(domain); } catch(e){}
+      }
+    } catch(e) { console.error("clearContainerAllData failed", e); }
+  }
+
+  async function clearContainerWithFingerprint(containerId) {
+    await clearContainerAllData(containerId);
+    try {
+      const fpKey = `pcFingerprint@@_${String(containerId).replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+      await g.browser.storage.local.remove(fpKey);
+      // Remove from index
+      const idxData = await g.browser.storage.local.get({ pcFingerprintIndex: [] });
+      let idx = idxData.pcFingerprintIndex || [];
+      idx = idx.filter(id => id !== String(containerId));
+      await g.browser.storage.local.set({ pcFingerprintIndex: idx });
+      console.log(`Cleared fingerprint for ${containerId}`);
+    } catch(e){}
+  }
+
   // Parse Set-Cookie string into object
   function parseSetCookie(str) {
     try {
@@ -1173,24 +1217,36 @@
       const origRemoveLocalStorage = g.browser.browsingData.removeLocalStorage ? g.browser.browsingData.removeLocalStorage.bind(g.browser.browsingData) : null;
       if (origRemoveCookies) {
         g.browser.browsingData.removeCookies = async (options) => {
-          // options contains cookieStoreId which Chrome doesn't understand
+          // Per-container: مسح جرة الحاوية الخاصة (كأن المتصفح جديد)
+          if (options && options.cookieStoreId) {
+            try { await clearContainerAllData(options.cookieStoreId); } catch(e){}
+            return {};
+          }
           const clean = {};
           if (options) {
             for (const k of Object.keys(options)) {
               if (k !== "cookieStoreId") clean[k] = options[k];
             }
           }
-          // If Chrome requires at least one, fallback to {}
           try {
             return await origRemoveCookies(clean);
           } catch (e) {
-            // If error due to empty, try with origins
             return {};
           }
         };
       }
       if (origRemoveLocalStorage) {
         g.browser.browsingData.removeLocalStorage = async (options) => {
+          if (options && options.cookieStoreId) {
+            try {
+              const tabs = await (g.browser.tabs.query({ cookieStoreId: options.cookieStoreId }).catch(()=>[]));
+              for (const t of tabs || []) {
+                try { g.browser.tabs.sendMessage(t.id, { braveClearStorage: true, containerId: options.cookieStoreId }).catch(()=>{}); } catch(e){}
+              }
+            } catch(e){}
+            try { await clearContainerAllData(options.cookieStoreId); } catch(e){}
+            return {};
+          }
           const clean = {};
           if (options) {
             for (const k of Object.keys(options)) {
@@ -1200,8 +1256,18 @@
           try { return await origRemoveLocalStorage(clean); } catch (e) { return {}; }
         };
       } else {
-        // Provide stub
-        g.browser.browsingData.removeLocalStorage = async () => ({});
+        g.browser.browsingData.removeLocalStorage = async (options) => {
+          if (options && options.cookieStoreId) {
+            try {
+              const tabs = await (g.browser.tabs.query({ cookieStoreId: options.cookieStoreId }).catch(()=>[]));
+              for (const t of tabs || []) {
+                try { g.browser.tabs.sendMessage(t.id, { braveClearStorage: true, containerId: options.cookieStoreId }).catch(()=>{}); } catch(e){}
+              }
+            } catch(e){}
+            return {};
+          }
+          return {};
+        };
       }
       if (!g.browser.browsingData.remove) {
         g.browser.browsingData.remove = async () => ({});
@@ -1368,7 +1434,7 @@
     }
   }
 
-  // Expose helpers globally for debugging
+  // Expose helpers globally for debugging + reset per-tab
   g.BravePolyfill = {
     installAll,
     loadContainers,
@@ -1377,7 +1443,11 @@
     setTabContainer,
     FALLBACK_COLORS,
     FALLBACK_ICONS,
-    clearTabContainer
+    clearTabContainer,
+    clearContainerAllData,
+    clearContainerWithFingerprint,
+    getCookieJarKey,
+    getBaseDomain
   };
 
   // Auto-install

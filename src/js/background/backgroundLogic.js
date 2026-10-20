@@ -161,17 +161,48 @@ const backgroundLogic = {
     return extensionInfo;
   },
 
-  // Remove container data (cookies, localStorage and cache)
+  // Remove container data (cookies, localStorage and cache) - كأن المتصفح جديد
   async deleteContainerDataOnly(userContextId) {
+    const cookieStoreId = this.cookieStoreId(userContextId);
     await browser.browsingData.removeCookies({
-      cookieStoreId: this.cookieStoreId(userContextId)
+      cookieStoreId
     });
-
     await browser.browsingData.removeLocalStorage({
-      cookieStoreId: this.cookieStoreId(userContextId)
+      cookieStoreId
     });
-
+    // History: احذف سجل التابات المفتوحة لهذه الحاوية
+    try {
+      const tabs = await browser.tabs.query({ cookieStoreId }).catch(()=>[]);
+      for (const t of tabs) {
+        if (t.url && !t.url.startsWith("about") && !t.url.startsWith("chrome") && !t.url.startsWith("brave")) {
+          try { await browser.history.deleteUrl({ url: t.url }); } catch(e){}
+        }
+      }
+      // Also try to clear browsingData cache/history if permission granted
+      try { if (browser.browsingData.removeCache) await browser.browsingData.removeCache({ cookieStoreId }); } catch(e){}
+      try { if (browser.browsingData.removeHistory) await browser.browsingData.removeHistory({ cookieStoreId }); } catch(e){}
+    } catch(e){}
     return {done: true, userContextId};
+  },
+
+  // Per-tab reset: مسح كوكيز + localStorage + cache + history للتاب/حاوية المحددة ثم إعادة تحميل
+  async resetSingleTabContainer(tabId, userContextId) {
+    const cookieStoreId = this.cookieStoreId(userContextId);
+    // 1. مسح كل بيانات الحاوية (كوكيز + localStorage)
+    await this.deleteContainerDataOnly(userContextId);
+    // 2. مسح history للتاب الحالي فقط
+    try {
+      const tab = await browser.tabs.get(tabId).catch(()=>null);
+      if (tab && tab.url) {
+        try { await browser.history.deleteUrl({ url: tab.url }); } catch(e){}
+        // Also clear history search results for this URL pattern? best effort
+      }
+    } catch(e){}
+    // 3. إعادة تحميل التاب كأنه جديد
+    try {
+      await browser.tabs.reload(tabId);
+    } catch(e){}
+    return {done: true, userContextId, tabId};
   },
 
   getUserContextIdFromCookieStoreId(cookieStoreId) {
