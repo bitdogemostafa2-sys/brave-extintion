@@ -424,19 +424,8 @@ window.assignManager = {
     this.maybeAddProxyListeners();
 
     // Before a request is handled by the browser we decide if we should
-    // route through a different container
+    // route through a different container - In Brave/MV3 blocking is handled via tabs.onUpdated in brave-polyfill
     this.canceledRequests = {};
-    try {
-      // In Brave/MV3, blocking webRequest is not available; assignment is handled via tabs.onUpdated in brave-polyfill
-      // We attempt to register but gracefully degrade if not supported
-      if (browser.webRequest && browser.webRequest.onBeforeRequest) {
-        browser.webRequest.onBeforeRequest.addListener((options) => {
-          return this.onBeforeRequest(options);
-        },{urls: ["<all_urls>"], types: ["main_frame"]}, ["blocking"]);
-      }
-    } catch (e) {
-      // Fallback handled in polyfill
-    }
 
     // Clean up canceled requests
     try {
