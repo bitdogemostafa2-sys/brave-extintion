@@ -1,0 +1,473 @@
+{
+  "extensionDescription": {
+    "message": "Multi-Account Containers-ek lineako zure bizitzaren zati guztiak fitxa desberdinetan izaten laguntzen dizu. Etiketa pertsonalizatuek eta koloreztatutako fitxek askotariko jarduerak desberdintzen laguntzen dute, hala nola erosketak, bidaien plangintza edo laneko posta elektronikoa begiratzea.",
+    "description": "Description of the extension. DO NOT TRANSLATE \"Multi-Account Containers\"."
+  },
+  "openInNewTabTitle": {
+    "message": "Ireki fitxa berria hemen…",
+    "description": "Menu title"
+  },
+  "reopenThisSiteIn": {
+    "message": "Ireki berriro gune hau hemen…",
+    "description": "Menu title"
+  },
+  "sortTabsByContainer": {
+    "message": "Ordenatu fitxak edukiontziaren arabera",
+    "description": "Menu title"
+  },
+  "alwaysOpenThisSiteIn": {
+    "message": "Ireki beti gune hau hemen…",
+    "description": "Menu title"
+  },
+  "alwaysOpenIn": {
+    "message": "Ireki beti hemen…",
+    "description": "Menu title"
+  },
+  "alwaysOpenSiteInContainer": {
+    "message": "Ireki beti gunea edukiontzi batean"
+  },
+  "openANewTabIn": {
+    "message": "Ireki fitxa berria hemen…"
+  },
+  "openNewTabInThisContainer": {
+    "message": "Ireki fitxa berria edukiontzi honetan"
+  },
+  "openTabs": {
+    "message": "Irekitako fitxak",
+    "description": "Section title for tabs that are currently open in that container"
+  },
+  "moveTabsToANewWindow": {
+    "message": "Eraman fitxak leiho berri batera"
+  },
+  "onboarding_1_header": {
+    "message": "Sarean egiten dituzun gauza guztiak kudeatzeko modu hobea"
+  },
+  "onboarding_1_description": {
+    "message": "Erabili edukiontziak atazak antolatzeko, kontuak kudeatzeko eta arreta nahi duzun tokian mantentzeko."
+  },
+  "onboarding_2_header": {
+    "message": "Jarri edukiontziak zuretzat lanean."
+  },
+  "onboarding_2_description": {
+    "message": "Koloreztatzeak edo edukiontzi-fitxa bereiziak izateak laguntzen dizute gauzak erraz aurkitzen, arreta mantentzen eta distrazioak gutxitzen."
+  },
+  "onboarding_3_header": {
+    "message": "Guztiarentzat toki bat, eta gauza guztiak bere tokian."
+  },
+  "onboarding_3_description": {
+    "message": "Hasi guk sortutako edukiontziekin edo sortu zureak."
+  },
+  "onboarding_4_header": {
+    "message": "Ireki beti guneak nahi dituzun edukiontzietan."
+  },
+  "onboarding_4_description": {
+    "message": "Egin eskuin-klika edukiontzi-fitxa baten barruan gunea beti edukiontzi horretan irekitzea esleitzeko."
+  },
+  "onboarding_5_header": {
+    "message": "Edukiontzi-fitxak behar dituzunean."
+  },
+  "onboarding_5_description": {
+    "message": "Mantendu sakatuta fitxa berriaren botoia edukiontzi-fitxa berri bat sortzeko."
+  },
+  "onboarding_6_header": {
+    "message": "Edukiontzien sinkronizazioa eskuragarri dago!"
+  },
+  "onboarding_6_description_2": {
+    "message": "Aktibatu sinkronizazioa zure kontuarekin konektatutako edozein ordenagailurekin edukiontzi- eta gune-esleipenak partekatzeko."
+  },
+  "onboarding_7_header_2": {
+    "message": "Kontua behar da sinkronizatzeko."
+  },
+  "onboarding_7_description_2": {
+    "message": "Egin klik 'Hasi saioa' botoian berresteko zure kontua aktibo dagoela."
+  },
+  "onboarding_8_description": {
+    "message": "Edukiontziak Mozilla VPN edo zure proxy propioarekin integra daitezke orain, zure jarduera babestuko duen konexio seguru eta pribatua sortzeko."
+  },
+  "oneHundredTabsHeader": {
+    "message": "100 fitxa!"
+  },
+  "youHaveOpened": {
+    "message": "100 edukiontzi-fitxa ireki dituzu."
+  },
+  "spreadTheWord": {
+    "message": "Edukiontziak gustuko badituzu, lagun iezaguzu hitza zabaltzen!"
+  },
+  "rate": {
+    "message": "Baloratu"
+  },
+  "share": {
+    "message": "Partekatu"
+  },
+  "tweet": {
+    "message": "Txiokatu"
+  },
+  "default": {
+    "message": "Lehenetsia"
+  },
+  "manageContainers": {
+    "message": "Kudeatu edukiontziak"
+  },
+  "newContainer": {
+    "message": "Edukiontzi berria"
+  },
+  "hideThisContainer": {
+    "message": "Ezkutatu edukiontzi hau"
+  },
+  "showThisContainer": {
+    "message": "Erakutsi edukiontzi hau"
+  },
+  "removeThisContainer": {
+    "message": "Kendu edukiontzi hau"
+  },
+  "removeThisContainerConfirmation": {
+    "message": "Ziur zaude edukiontzi hau ezabatu nahi duzula?"
+  },
+  "clearContainerStoragePanelTitle": {
+    "message": "Garbitu edukiontziaren biltegiratzea"
+  },
+  "clearContainerStorageConfirmation": {
+    "message": "Ziur zaude cookieak eta biltegiratzea garbitu nahi dituzula edukiontzi honentzat?"
+  },
+  "cancel": {
+    "message": "Utzi"
+  },
+  "ok": {
+    "message": "Ados"
+  },
+  "sitesAssignedToThisContainer": {
+    "message": "Edukiontzi honi esleitutako guneak"
+  },
+  "options": {
+    "message": "Aukerak"
+  },
+  "name": {
+    "message": "Izena"
+  },
+  "color": {
+    "message": "Kolorea"
+  },
+  "icon": {
+    "message": "Ikonoa"
+  },
+  "limitToDesignatedSites": {
+    "message": "Mugatu aukeratutako guneetara"
+  },
+  "deleteThisContainer": {
+    "message": "Ezabatu edukiontzi hau"
+  },
+  "manageSiteList": {
+    "message": "Kudeatu guneen zerrenda…"
+  },
+  "manageThisContainer": {
+    "message": "Kudeatu edukiontzi hau"
+  },
+  "containers": {
+    "message": "Edukiontziak"
+  },
+  "done": {
+    "message": "Eginda"
+  },
+  "getStarted": {
+    "message": "Hasi erabiltzen"
+  },
+  "signIn": {
+    "message": "Hasi saioa"
+  },
+  "notNow": {
+    "message": "Une honetan ez"
+  },
+  "startSyncing": {
+    "message": "Hasi sinkronizatzen"
+  },
+  "info": {
+    "message": "informazioa",
+    "description": "Alternative text for the i icon in the toolbar icon pop-up"
+  },
+  "next": {
+    "message": "Hurrengoa"
+  },
+  "openThisSiteConfirmation": {
+    "message": "Ireki gune hau zuk esleitutako edukiontzian?"
+  },
+  "wouldYouStillLikeToOpenConfirmation": {
+    "message": "Uneko edukiontzi honetan ireki nahi duzu halere?"
+  },
+  "rememberMyDecision": {
+    "message": "Gogoratu nire erabakia gune honetarako"
+  },
+  "optionalPermissions": {
+    "message": "Aukerako baimenak:"
+  },
+  "keyboardShortCuts": {
+    "message": "Teklatuaren lasterbideak:"
+  },
+  "onboarding": {
+    "message": "Sarrera"
+  },
+  "resetOnboardingPanels": {
+    "message": "Berrezarri aurkezpeneko panelak"
+  },
+  "onboardingToggle": {
+    "message": "Txandakatu hau aurkezpeneko panelak berriro ikusteko."
+  },
+  "tabBehavior": {
+    "message": "Fitxaren portaera:"
+  },
+  "enableBookMarkMenus": {
+    "message": "Gaitu laster-marken menuak"
+  },
+  "sync": {
+    "message": "Sinkronizazioa:"
+  },
+  "enableSync": {
+    "message": "Gaitu sinkronizazioa"
+  },
+  "enableBookMarkMenusDescription": {
+    "message": "Ezarpen honek aukera ematen dizu laster-marka bat edo laster-marken karpeta bat edukiontzi batean irekitzeko."
+  },
+  "enableSyncDescription": {
+    "message": "Ezarpen honek aukera ematen dizu zure edukiontziak eta guneen esleipenak gailuen artean sinkronizatzeko."
+  },
+  "syncExclude": {
+    "message": "Edukiontzia baztertzea"
+  },
+  "syncExcludePlaceholder": {
+    "message": "Idatzi adierazpen erregularra"
+  },
+  "syncExcludeDescription": {
+    "message": "Salbuetsi edukiontziak sinkronizaziotik hauen izena bat datorrenean zehaztutako adierazpen erregularrarekin (ez ditu maiuskulak/minuskulak bereizten)."
+  },
+  "replaceTab": {
+    "message": "Ordezkatu fitxa beste berri bat sortu ordez"
+  },
+  "replaceTabDescription": {
+    "message": "Ordezkatu uneko fitxa beste edukiontzi batera esleituta dagoen orria irekita badago (uneko fitxa irekita mantendu ordez). Honek ez du eraginik fitxak saguaren erdiko botoiarekin irekitzeko eginbidean."
+  },
+  "editWhichContainer": {
+    "message": "Editatu zein edukiontzi irekitzen den zenbakidun lasterbideak erabiliz."
+  },
+  "keyboardShortCut": {
+    "message": "$keyId$ teklatuaren lasterbidearekin ireki beharreko edukiontzia",
+    "placeholders": {
+      "keyId": {
+        "content": "$1"
+      }
+    }
+  },
+  "confirmNavigationTitle": {
+    "message": "Multi-Account Containers berretsi nabigazioa",
+    "description": "This is the title of a confirmation page. Please do not translate \"Multi-Account Containers\"."
+  },
+  "openInContainer": {
+    "message": "Ireki $containerName$ edukiontzian",
+    "placeholders": {
+      "containerName": {
+        "content": "$1"
+      }
+    }
+  },
+  "openInNoContainer": {
+    "message": "Ireki uneko fitxan",
+    "description": "This is the button text in confirmation page when we are not inside a container"
+  },
+  "youAskedFirefox": {
+    "message": "Firefoxi eskatu diozu beti $containerName$ edukiontzia irekitzeko gune honetarako:",
+    "placeholders": {
+      "containerName": {
+        "content": "$1"
+      }
+    }
+  },
+  "chooseLocation": {
+    "message": "Aukeratu kokapena",
+    "description": "Location refers to the geographical position used by the VPN"
+  },
+  "hide": {
+    "message": "Ezkutatu"
+  },
+  "show": {
+    "message": "Erakutsi"
+  },
+  "protectYourContainers": {
+    "message": "Babestu zure edukiontziak Mozilla VPNrekin"
+  },
+  "protectThisContainer": {
+    "message": "Babestu edukiontzi hau Mozilla VPNrekin"
+  },
+  "advancedProxySettings": {
+    "message": "Proxy-ezarpen aurreratuak"
+  },
+  "proxyInputLabel": {
+    "message": "Sartu proxy pertsonalizatua"
+  },
+  "useCustomLocation": {
+    "message": "Erabili kokapen pertsonalizatua edukiontzi honentzat"
+  },
+  "clearproxylabel": {
+    "message": "Garbitu proxy-a"
+  },
+  "moz_vpn_connected": {
+    "message": "Mozilla VPN aktibatuta dago"
+  },
+  "moz_vpn_disconnected": {
+    "message": "Mozilla VPN desaktibatuta dago"
+  },
+  "invalidProxyAlert": {
+    "message": "Idatzi baliozko proxy-aren URLa"
+  },
+  "mozillaVpnMustBeOn": {
+    "message": "Mozilla VPNk aktibo egon behar du eginbide hau erabiltzeko."
+  },
+  "learnMore": {
+    "message": "Argibide gehiago"
+  },
+  "proxyNowAvailable": {
+    "message": "Orain Mozilla VPN eta proxy-ezarpen aurreratuekin"
+  },
+  "applyToContainer": {
+    "message": "Aplikatu edukiontziari"
+  },
+  "tooltipWarning": {
+    "message": "Edukiontzi hau Mozilla VPNren proxya erabiltzeko konfiguratuta dago baina Mozilla VPNa ez dago aktibo. Edukiontzi hau erabiltzeko, aktibatu Mozilla VPNa."
+  },
+  "getMozillaVpn": {
+    "message": "Lortu Mozilla VPN"
+  },
+  "integratewithmozillavpn": {
+    "message": "Integratu zure edukiontziak Mozilla VPNrekin"
+  },
+  "mozillaVpnAndProxyPermissionsTitle": {
+    "message": "Mozilla VPN eta proxy-baimenak",
+    "description": "Section headline in settings"
+  },
+  "nativeMessagingPermissionTitle": {
+    "message": "Baimendu hedapenari mezuak trukatzea Firefox ez beste programekin",
+    "description": "Permission title"
+  },
+  "nativeMessagingPermissionDescription": {
+    "message": "Ezarpen honek baimena ematen dio hedapenari mezuak trukatzeko Mozilla VPN bezeroarekin eta hau beharrezkoa da Mozilla VPN integrazioaren eginbideak ondo ibil daitezen.",
+    "description": "'This setting' refers to the permission indicated in nativeMessagingPermissionTitle"
+  },
+  "proxyPermissionTitle": {
+    "message": "Baimendu hedapenari proxy-ezarpenak kontrolatzea",
+    "description": "Permission title"
+  },
+  "proxyPermissionDescription": {
+    "message": "Honek aukera ematen dizu aurreratutako proxy-ezarpenak erabiltzeko eta Mozilla VPN integrazioaren eginbideak gaitzeko.",
+    "description": "'This' refers to the permission indicated in proxyPermissionTitle"
+  },
+  "additionalPermissionNeeded": {
+    "message": "Eginbide honek baimen gehigarria behar du funtzionatzeko. Baimenak edonoiz desgai daitezke ezarpenen orrian.",
+    "description": "'This feature' is the browser proxy permission. This string appears on the 'Advanced Proxy Settings' panel when the proxy permission is disabled."
+  },
+  "mozillaVpnRequiresAdditionalPermissions": {
+    "message": "Mozilla VPNren integrazioak harpidetza eta baimen gehigarriak behar ditu funtzionatzeko."
+  },
+  "enable": {
+    "message": "Gaitu",
+    "description": "Button title "
+  },
+  "integrateContainers": {
+    "message": "Integratu zure edukiontziak Mozilla VPNrekin"
+  },
+  "theme": {
+    "message": "Itxura:",
+    "description": "Theme section title in the option page"
+  },
+  "chooseTheme": {
+    "message": "Aukeratu itxura",
+    "description": "Description for the theme option"
+  },
+  "themeAuto": {
+    "message": "Automatikoki detektatu (lehenetsia)",
+    "description": "Default value for the theme option select tag"
+  },
+  "themeLight": {
+    "message": "Argia",
+    "description": "Value for the theme option select tag"
+  },
+  "themeDark": {
+    "message": "Iluna",
+    "description": "Value for the theme option select tag"
+  },
+  "filterInputLabel": {
+    "message": "Iragazi edukiontzien zerrenda izenaren arabera:",
+    "description": "Label for the filter input in the main panel. Only visible for screen reader."
+  },
+  "filterInputPlaceholder": {
+    "message": "Bilatu edukiontzi-izena"
+  },
+  "imageAltContainerInfo": {
+    "message": "Edukiontziaren informazioa",
+    "description": "Alt text for right-arrow button to view container info"
+  },
+  "defaultContainerLabel": {
+    "message": "Edukiontzi lehenetsia",
+    "description": "The title of the default container"
+  },
+  "openContainerPanel": {
+    "message": "Ireki edukiontzien panela",
+    "description": "Label for option in the keyboard shortcut manager (associating a shortcut to open the container panel)"
+  },
+  "containerShortcut": {
+    "message": "Edukiontziaren $keyId$. lasterbidea",
+    "description": "Label for option in the keyboard shortcut manager. $keyId$ is a number from 1 to 10.",
+    "placeholders": {
+      "keyId": {
+        "content": "$1"
+      }
+    }
+  },
+  "reopenInContainerShortcut": {
+    "message": "Ireki berriro $keyId$ edukiontzian",
+    "description": "The keyboard shortcut description for reopening current tab in container number $keyId$",
+    "placeholders": {
+      "keyId": {
+        "content": "$1"
+      }
+    }
+  },
+  "openBookmarkInContainerTab": {
+    "message": "Ireki laster-marka edukiontzi-fitxan"
+  },
+  "clearSiteCookiesTooltipInfo": {
+    "message": "Garbitu gune honetarako cookieak",
+    "description": "Label for hovering of the refresh button in a containers site manager"
+  },
+  "deleteSiteTooltipInfo": {
+    "message": "Kendu gune hau",
+    "description": "Label for hovering of the trash button in a containers site manager"
+  },
+  "clearContainerStorage": {
+    "message": "Garbitu biltegiratzea eta cookieak",
+    "description": "Label for the clearing a containers storage and cache option"
+  },
+  "cookiesClearedSuccess": {
+    "message": "$siteName$ gunerako cookieak ondo garbitu dira",
+    "description": "Label to confirm that cookies were cleared in the site manager",
+    "placeholders": {
+      "siteName": {
+        "content": "$1"
+      }
+    }
+  },
+  "cookiesCouldNotBeCleared": {
+    "message": "Ezin izan dira $siteName$ gunerako cookieak garbitu",
+    "description": "Error message that shows if cookies could not be cleared in the site manager",
+    "placeholders": {
+      "siteName": {
+        "content": "$1"
+      }
+    }
+  },
+  "storageWasClearedConfirmation": {
+    "message": "$containerName$ edukiontziaren biltegiratzea eta cookieak garbitu egin dira.",
+    "description": "The confirmation label that a containers storage was cleared successfully.",
+    "placeholders": {
+      "containerName": {
+        "content": "$1"
+      }
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "manifest_version": 3,
+  "name": "Firefox Multi-Account Containers",
+  "version": "8.4.0",
+  "description": "__MSG_extensionDescription__",
+  "icons": {
+    "48": "img/multiaccountcontainer-16.svg",
+    "96": "img/multiaccountcontainer-16.svg"
+  },
+  "homepage_url": "https://github.com/mozilla/multi-account-containers#readme",
+  "permissions": [
+    "tabs",
+    "cookies",
+    "contextMenus",
+    "storage",
+    "tabGroups",
+    "unlimitedStorage",
+    "activeTab",
+    "history",
+    "idle",
+    "management",
+    "webRequest"
+  ],
+  "optional_permissions": [
+    "bookmarks",
+    "browsingData",
+    "nativeMessaging",
+    "proxy"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "js/background/service-worker.js"
+  },
+  "action": {
+    "default_icon": "img/multiaccountcontainer-16.svg",
+    "default_title": "Firefox Multi-Account Containers",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["js/brave-polyfill.js", "js/content-script.js"],
+      "css": ["css/content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "default_locale": "en",
+  "web_accessible_resources": [
+    {
+      "resources": ["/img/multiaccountcontainer-16.svg", "/img/usercontext.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Period",
+        "mac": "MacCtrl+Period"
+      },
+      "description": "__MSG_openContainerPanel__"
+    },
+    "sort_tabs": {
+      "description": "__MSG_sortTabsByContainer__"
+    },
+    "open_container_0": { "suggested_key": { "default": "Ctrl+Shift+1" }, "description": "__MSG_containerShortcut__" },
+    "open_container_1": { "suggested_key": { "default": "Ctrl+Shift+2" }, "description": "__MSG_containerShortcut__" },
+    "open_container_2": { "suggested_key": { "default": "Ctrl+Shift+3" }, "description": "__MSG_containerShortcut__" },
+    "open_container_3": { "suggested_key": { "default": "Ctrl+Shift+4" }, "description": "__MSG_containerShortcut__" },
+    "open_container_4": { "suggested_key": { "default": "Ctrl+Shift+5" }, "description": "__MSG_containerShortcut__" },
+    "open_container_5": { "suggested_key": { "default": "Ctrl+Shift+6" }, "description": "__MSG_containerShortcut__" },
+    "open_container_6": { "suggested_key": { "default": "Ctrl+Shift+7" }, "description": "__MSG_containerShortcut__" },
+    "open_container_7": { "suggested_key": { "default": "Ctrl+Shift+8" }, "description": "__MSG_containerShortcut__" },
+    "open_container_8": { "suggested_key": { "default": "Ctrl+Shift+9" }, "description": "__MSG_containerShortcut__" },
+    "open_container_9": { "suggested_key": { "default": "Ctrl+Shift+0" }, "description": "__MSG_containerShortcut__" },
+    "reopen_in_container_0": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_1": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_2": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_3": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_4": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_5": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_6": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_7": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_8": { "description": "__MSG_reopenInContainerShortcut__" },
+    "reopen_in_container_9": { "description": "__MSG_reopenInContainerShortcut__" }
+  },
+  "incognito": "not_allowed"
+}
