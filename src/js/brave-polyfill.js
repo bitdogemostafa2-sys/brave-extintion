@@ -366,8 +366,26 @@
 
   // --- Cookie Isolation for Brave (emulates Firefox per-container cookie jars) ---
   const COOKIE_JAR_PREFIX = "braveCookieJar@@_";
-  const domainOwner = new Map(); // domain -> cookieStoreId that currently owns browser cookies for that domain
+  const DOMAIN_OWNER_KEY = "braveDomainOwner";
+  let domainOwner = new Map(); // domain -> cookieStoreId that currently owns browser cookies for that domain
   let cookieIsolationEnabled = true;
+  // Persist domainOwner so التاب الأصلي ما يخرجش بعد ما الـ service worker ينام ويصحى
+  async function persistDomainOwner() {
+    try {
+      const obj = Object.fromEntries(domainOwner);
+      await g.browser.storage.local.set({ [DOMAIN_OWNER_KEY]: obj });
+    } catch(e){}
+  }
+  async function loadDomainOwner() {
+    try {
+      const data = await g.browser.storage.local.get({ [DOMAIN_OWNER_KEY]: {} });
+      const obj = data[DOMAIN_OWNER_KEY] || {};
+      domainOwner = new Map(Object.entries(obj));
+      if (domainOwner.size) console.log(`Loaded domainOwner ${domainOwner.size} domains`, obj);
+    } catch(e){}
+  }
+  // Load on startup
+  try { loadDomainOwner(); } catch(e){}
 
   function getDomainFromUrl(url) {
     try { return new URL(url).hostname; } catch(e) { return null; }
@@ -676,11 +694,13 @@
       if (!stored || !stored.length) {
         // Default has no saved jar yet (أول مرة) -> لا نمسح، خلّي كوكيز المتصفح العادي كما هي
         domainOwner.set(base, targetContainerId);
+        await persistDomainOwner();
         return;
       }
     }
     await restoreCookiesFromJar(targetContainerId, domain);
     domainOwner.set(base, targetContainerId);
+    await persistDomainOwner();
     // Also handle www. variant if needed? Already covered by domain matching
   }
 
