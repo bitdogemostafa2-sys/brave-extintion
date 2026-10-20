@@ -364,6 +364,152 @@
     }
   }
 
+  // --- Cookie Isolation for Brave (emulates Firefox per-container cookie jars) ---
+  const COOKIE_JAR_PREFIX = "braveCookieJar@@_";
+  const domainOwner = new Map(); // domain -> cookieStoreId that currently owns browser cookies for that domain
+  let cookieIsolationEnabled = true;
+
+  function getDomainFromUrl(url) {
+    try { return new URL(url).hostname; } catch(e) { return null; }
+  }
+
+  function getCookieJarKey(containerId, domain) {
+    return `${COOKIE_JAR_PREFIX}${containerId}@@${domain}`;
+  }
+
+  async function getAllCookiesForDomain(domain) {
+    try {
+      if (!g.browser.cookies || !g.browser.cookies.getAll) return [];
+      // Chrome cookies.getAll with domain will match subdomains too, we filter
+      const all = await g.browser.cookies.getAll({ domain: domain });
+      return all;
+    } catch(e) { return []; }
+  }
+
+  async function buildCookieUrl(cookie) {
+    // For removal/set we need a URL
+    const domain = cookie.domain.startsWith(".") ? cookie.domain.substring(1) : cookie.domain;
+    const protocol = cookie.secure ? "https://" : "http://";
+    return protocol + domain + cookie.path;
+  }
+
+  async function saveCurrentCookiesToJar(containerId, domain) {
+    if (!domain || !containerId) return;
+    const cookies = await getAllCookiesForDomain(domain);
+    const key = getCookieJarKey(containerId, domain);
+    // Store minimal cookie data needed for restore
+    const toStore = cookies.map(c => ({
+      name: c.name, value: c.value, domain: c.domain, path: c.path,
+      secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite,
+      expirationDate: c.expirationDate, storeId: c.storeId
+    }));
+    try {
+      await g.browser.storage.local.set({ [key]: toStore });
+    } catch(e) {}
+  }
+
+  async function clearCookiesForDomain(domain) {
+    const cookies = await getAllCookiesForDomain(domain);
+    for (const c of cookies) {
+      const url = await buildCookieUrl(c);
+      try { await g.browser.cookies.remove({ url, name: c.name, storeId: c.storeId }); } catch(e) {}
+    }
+  }
+
+  async function restoreCookiesFromJar(containerId, domain) {
+    if (!domain || !containerId) return;
+    const key = getCookieJarKey(containerId, domain);
+    let stored;
+    try {
+      const data = await g.browser.storage.local.get(key);
+      stored = data[key];
+    } catch(e) {}
+    if (!stored || !stored.length) {
+      // No stored cookies for this container+domain -> clear current to ensure isolation
+      await clearCookiesForDomain(domain);
+      return;
+    }
+    // Clear current before restoring to avoid mixing
+    await clearCookiesForDomain(domain);
+    for (const c of stored) {
+      const url = await buildCookieUrl(c);
+      try {
+        await g.browser.cookies.set({
+          url, name: c.name, value: c.value, domain: c.domain, path: c.path,
+          secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite,
+          expirationDate: c.expirationDate
+        });
+      } catch(e) {}
+    }
+  }
+
+  async function swapCookiesForNavigation(tabId, url, targetContainerId) {
+    if (!cookieIsolationEnabled) return;
+    const domain = getDomainFromUrl(url);
+    if (!domain) return;
+    const currentOwner = domainOwner.get(domain);
+    if (currentOwner === targetContainerId) return; // already correct
+    // Save current browser cookies to previous owner
+    if (currentOwner) {
+      await saveCurrentCookiesToJar(currentOwner, domain);
+    } else if (targetContainerId !== DEFAULT_CONTAINER_COOKIE_ID) {
+      // If no owner yet, save default jar if needed (first time)
+      // Check if default has cookies and we are moving away from default
+      // We should not overwrite default jar yet, just track
+    }
+    // Restore target's jar
+    await restoreCookiesFromJar(targetContainerId, domain);
+    domainOwner.set(domain, targetContainerId);
+    // Also handle www. variant if needed? Already covered by domain matching
+  }
+
+  function installCookieIsolation() {
+    const tabsApi = g.browser.tabs;
+    if (!tabsApi || !g.browser.cookies) return;
+
+    // On tab activation, swap cookies for its domain
+    if (tabsApi.onActivated) {
+      tabsApi.onActivated.addListener(async (activeInfo) => {
+        try {
+          const tab = await tabsApi.get(activeInfo.tabId);
+          if (!tab || !tab.url) return;
+          const containerId = await getTabContainer(tab.id);
+          await swapCookiesForNavigation(tab.id, tab.url, containerId);
+          // Also inject localStorage isolation hint
+          try { g.browser.tabs.sendMessage(tab.id, { braveContainerId: containerId }).catch(()=>{}); } catch(e){}
+        } catch(e) {}
+      });
+    }
+
+    // On navigation committed, swap before page loads
+    const webNav = g.browser.webNavigation || g.chrome.webNavigation;
+    if (webNav && webNav.onCommitted) {
+      webNav.onCommitted.addListener(async (details) => {
+        if (details.frameId !== 0) return;
+        try {
+          const containerId = await getTabContainer(details.tabId);
+          await swapCookiesForNavigation(details.tabId, details.url, containerId);
+        } catch(e) {}
+      });
+    } else if (tabsApi.onUpdated) {
+      // Fallback: use tabs.onUpdated if webNavigation not available
+      tabsApi.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+        if (!changeInfo.url) return;
+        try {
+          const containerId = await getTabContainer(tabId);
+          await swapCookiesForNavigation(tabId, changeInfo.url, containerId);
+        } catch(e){}
+      });
+    }
+
+    // On tab close, optionally persist its container's cookies for its domain
+    if (tabsApi.onRemoved) {
+      // No action needed, cookies already saved on swap
+    }
+
+    console.log("Brave Cookie Isolation installed");
+  }
+
   // Install tabs wrappers
   function installTabsWrapper() {
     const tabsApi = g.browser.tabs || g.chrome.tabs;
@@ -555,6 +701,9 @@
     if (webNav && webNav.onBeforeNavigate) {
       // Additional hook could be added, but tabs.onUpdated is sufficient
     }
+
+    // Install cookie isolation (per-container cookie jars)
+    try { installCookieIsolation(); } catch(e) { console.error("Cookie isolation install failed", e); }
   }
 
   // --- browserAction / action polyfill ---
