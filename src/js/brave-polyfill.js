@@ -373,16 +373,41 @@
     try { return new URL(url).hostname; } catch(e) { return null; }
   }
 
+  function getBaseDomain(hostname) {
+    if (!hostname) return null;
+    // Simple eTLD+1: last 2 labels for most TLDs, handle co.* etc via heuristic
+    const parts = hostname.split(".").filter(Boolean);
+    if (parts.length <= 2) return hostname;
+    // Known publicsuffix 2-level TLDs
+    const twoLevel = ["co.uk","co.jp","com.au","co.nz","co.za","com.br","co.in"];
+    const last2 = parts.slice(-2).join(".");
+    const last3 = parts.slice(-3).join(".");
+    if (twoLevel.includes(last2)) return parts.slice(-3).join(".");
+    return parts.slice(-2).join(".");
+  }
+
   function getCookieJarKey(containerId, domain) {
-    return `${COOKIE_JAR_PREFIX}${containerId}@@${domain}`;
+    const base = getBaseDomain(domain) || domain;
+    return `${COOKIE_JAR_PREFIX}${containerId}@@${base}`;
   }
 
   async function getAllCookiesForDomain(domain) {
     try {
       if (!g.browser.cookies || !g.browser.cookies.getAll) return [];
-      // Chrome cookies.getAll with domain will match subdomains too, we filter
-      const all = await g.browser.cookies.getAll({ domain: domain });
-      return all;
+      // Fetch all cookies and filter by domain matching (parent domain cookies like .dutchycorp.space)
+      const all = await g.browser.cookies.getAll({});
+      const base = domain.toLowerCase();
+      return all.filter(c => {
+        const cd = (c.domain || "").toLowerCase();
+        // Exact or parent domain match
+        if (cd === base) return true;
+        if (cd.startsWith(".")) {
+          const bare = cd.slice(1);
+          return base === bare || base.endsWith("."+bare);
+        }
+        // Also check if cookie domain is subdomain of requested? e.g., request autofaucet.dutchycorp.space, cookie for autofaucet.dutchycorp.space
+        return cd === base || base.endsWith("."+cd) || cd.endsWith("."+base);
+      });
     } catch(e) { return []; }
   }
 
@@ -576,7 +601,8 @@
     if (!cookieIsolationEnabled) return;
     const domain = getDomainFromUrl(url);
     if (!domain) return;
-    const currentOwner = domainOwner.get(domain);
+    const base = getBaseDomain(domain) || domain;
+    const currentOwner = domainOwner.get(base);
     if (currentOwner === targetContainerId) return; // already correct
     // Save current browser cookies to previous owner
     if (currentOwner) {
@@ -588,7 +614,7 @@
     }
     // Restore target's jar
     await restoreCookiesFromJar(targetContainerId, domain);
-    domainOwner.set(domain, targetContainerId);
+    domainOwner.set(base, targetContainerId);
     // Also handle www. variant if needed? Already covered by domain matching
   }
 
