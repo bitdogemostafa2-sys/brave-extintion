@@ -203,6 +203,8 @@
       list.splice(idx, 1);
       await saveContainers(list);
       fireEvent("onRemoved", { contextualIdentity: removed });
+      // حذف الحاوية = مسح شامل بإذن المستخدم: كل الجرار + البصمة + المفاتيح + الكوكيز الحية المملوكة لها
+      try { await clearContainerWithFingerprint(cookieStoreId); } catch(e) { console.error("Container full wipe failed", e); }
       // Also clean site assignments handled elsewhere
       return;
     },
@@ -384,8 +386,60 @@
       if (domainOwner.size) console.log(`Loaded domainOwner ${domainOwner.size} domains`, obj);
     } catch(e){}
   }
-  // Load on startup
-  try { loadDomainOwner(); } catch(e){}
+  // Load on startup - swaps تستنى التحميل ده عشان مفيش swap يشتغل بذاكرة فاضية
+  let domainOwnerReady;
+  try {
+    domainOwnerReady = loadDomainOwner().catch(() => {});
+  } catch(e){ domainOwnerReady = Promise.resolve(); }
+
+  // --- Session Immortality guards (أقوى حماية من خروج الجلسات) ---
+  // 1) تمديد صلاحية الكوكيز سنة كاملة - الجلسات خالدة من ناحية المتصفح
+  const SESSION_FOREVER_SECONDS = 365 * 24 * 60 * 60;
+  function extendExpiration(exp) {
+    const target = Math.floor(Date.now() / 1000) + SESSION_FOREVER_SECONDS;
+    if (!exp || exp < target) return target;
+    return exp;
+  }
+  // 2) قفل لكل دومين - أي swap لازم يستنى اللي قبله يخلص 100% (يقفل ثقب التسابق)
+  const swapLocks = new Map(); // baseDomain -> Promise chain
+  function withDomainLock(base, fn) {
+    const prev = swapLocks.get(base) || Promise.resolve();
+    const next = prev.then(() => fn());
+    swapLocks.set(base, next.catch(() => {}));
+    return next;
+  }
+  // 3) Reload تلقائي مرة واحدة لكل (تاب, URL) + حد أقصى 3 مرات/دقيقة للتاب (ضد أي loop)
+  const autoReloadedKeys = new Set(); // `${tabId}|${url}`
+  const reloadTimestamps = new Map(); // tabId -> number[]
+  function maybeAutoReloadAfterRestore(tabId, url) {
+    try {
+      if (!tabId || tabId < 0 || !url) return;
+      const key = `${tabId}|${url}`;
+      if (autoReloadedKeys.has(key)) return;
+      const now = Date.now();
+      const arr = (reloadTimestamps.get(tabId) || []).filter(t => now - t < 60000);
+      if (arr.length >= 3) { reloadTimestamps.set(tabId, arr); return; }
+      arr.push(now);
+      reloadTimestamps.set(tabId, arr);
+      autoReloadedKeys.add(key);
+      if (autoReloadedKeys.size > 1000) {
+        const first = autoReloadedKeys.values().next().value;
+        autoReloadedKeys.delete(first);
+      }
+      console.log(`Auto-reloading tab ${tabId} after cookie restore (${url})`);
+      const p = g.browser.tabs.reload(tabId);
+      if (p && p.catch) p.catch(() => {});
+    } catch(e){}
+  }
+  function purgeReloadGuardsForTab(tabId) {
+    try {
+      reloadTimestamps.delete(tabId);
+      const prefix = `${tabId}|`;
+      for (const k of Array.from(autoReloadedKeys)) {
+        if (k.startsWith(prefix)) autoReloadedKeys.delete(k);
+      }
+    } catch(e){}
+  }
 
   function getDomainFromUrl(url) {
     try { return new URL(url).hostname; } catch(e) { return null; }
@@ -440,27 +494,39 @@
     if (!domain || !containerId) return;
     const cookies = await getAllCookiesForDomain(domain);
     const key = getCookieJarKey(containerId, domain);
-    // Store minimal cookie data needed for restore
-    const toStore = cookies.map(c => ({
-      name: c.name, value: c.value, domain: c.domain, path: c.path,
-      secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite,
-      expirationDate: c.expirationDate, storeId: c.storeId
-    }));
+    // دمج (upsert) بدل الاستبدال الكامل - الجرة تكسب بس ولا تخسر حاجة أبداً
+    // الحذف يحصل فقط من: أمر Set-Cookie صريح (logout بإيدك) أو المسح اليدوي ⟳ أو حذف الحاوية
+    let stored = [];
     try {
-      await g.browser.storage.local.set({ [key]: toStore });
+      const data = await g.browser.storage.local.get({ [key]: [] });
+      stored = data[key] || [];
+    } catch(e) { stored = []; }
+    for (const c of cookies) {
+      const entry = {
+        name: c.name, value: c.value, domain: c.domain, path: c.path,
+        secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite,
+        expirationDate: extendExpiration(c.expirationDate), storeId: c.storeId
+      };
+      const idx = stored.findIndex(s => s.name === entry.name && s.domain === entry.domain && (s.path || "/") === (entry.path || "/"));
+      if (idx >= 0) stored[idx] = entry; else stored.push(entry);
+    }
+    try {
+      await g.browser.storage.local.set({ [key]: stored });
     } catch(e) {}
   }
 
   async function clearCookiesForDomain(domain) {
     const cookies = await getAllCookiesForDomain(domain);
+    let removed = 0;
     for (const c of cookies) {
       const url = await buildCookieUrl(c);
-      try { await g.browser.cookies.remove({ url, name: c.name, storeId: c.storeId }); } catch(e) {}
+      try { await g.browser.cookies.remove({ url, name: c.name, storeId: c.storeId }); removed++; } catch(e) {}
     }
+    return removed;
   }
 
   async function restoreCookiesFromJar(containerId, domain) {
-    if (!domain || !containerId) return;
+    if (!domain || !containerId) return { restored: 0, cleared: 0 };
     const key = getCookieJarKey(containerId, domain);
     let stored;
     try {
@@ -469,27 +535,31 @@
     } catch(e) {}
     if (!stored || !stored.length) {
       // No stored cookies for this container+domain -> clear current to ensure isolation
-      await clearCookiesForDomain(domain);
-      return;
+      const clearedOnly = await clearCookiesForDomain(domain);
+      return { restored: 0, cleared: clearedOnly };
     }
     // Clear current before restoring to avoid mixing
-    await clearCookiesForDomain(domain);
+    const cleared = await clearCookiesForDomain(domain);
+    let restored = 0;
     for (const c of stored) {
       const url = await buildCookieUrl(c);
       try {
         await g.browser.cookies.set({
           url, name: c.name, value: c.value, domain: c.domain, path: c.path,
           secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite,
-          expirationDate: c.expirationDate
+          expirationDate: extendExpiration(c.expirationDate)
         });
+        restored++;
       } catch(e) {}
     }
+    return { restored, cleared };
   }
 
   // --- Reset container per-tab (كوكيز + History + localStorage/cache كأن المتصفح جديد) ---
   async function clearContainerAllData(containerId) {
     if (!containerId) return;
     try {
+      try { await domainOwnerReady; } catch(e){}
       const all = await g.browser.storage.local.get();
       const keysToRemove = [];
       for (const k of Object.keys(all)) {
@@ -503,16 +573,16 @@
         await g.browser.storage.local.remove(keysToRemove);
         console.log(`Cleared ${keysToRemove.length} cookie jars for ${containerId}`);
       }
-      // Clear domainOwner entries owned by this container
+      // نمسح الكوكيز الحية بس للدومينات اللي الحاوية دي مالكتها فعلاً دلوقتي
+      // (دومين مالكه حاوية تانية أو المتصفح العادي = سيبه - جلستهم محفوظة في جرارهم)
+      const ownedDomains = [];
       for (const [domain, owner] of domainOwner.entries()) {
-        if (owner === containerId) domainOwner.delete(domain);
+        if (owner === containerId) { ownedDomains.push(domain); domainOwner.delete(domain); }
       }
-      // Also clear real browser cookies that currently belong to this container's domains
-      // We can't know all domains, but we clear for domains we just removed
-      for (const key of keysToRemove) {
-        const domain = key.slice((COOKIE_JAR_PREFIX + containerId + "@@").length);
+      for (const domain of ownedDomains) {
         try { await clearCookiesForDomain(domain); } catch(e){}
       }
+      await persistDomainOwner();
     } catch(e) { console.error("clearContainerAllData failed", e); }
   }
 
@@ -593,37 +663,44 @@
     return valid.map(c => `${c.name}=${c.value}`).join("; ");
   }
 
+  function normalizeCookieDomain(d) { return (d || "").replace(/^\./, "").toLowerCase(); }
+  function cookieDomainsRelated(a, b) {
+    const x = normalizeCookieDomain(a), y = normalizeCookieDomain(b);
+    if (!x || !y) return x === y;
+    return x === y || x.endsWith("." + y) || y.endsWith("." + x);
+  }
+
+  // Upsert/حذف كوكي واحد جوه جرة - تمديد الصلاحية سنة + تنفيذ حذف الـ logout اليدوي بأي صيغة domain
+  async function upsertCookieIntoJar(containerId, domain, parsed) {
+    const key = getCookieJarKey(containerId, domain);
+    let stored = [];
+    try {
+      const data = await g.browser.storage.local.get({ [key]: [] });
+      stored = data[key] || [];
+    } catch(e){ stored = []; }
+    const isDelete = parsed.value === "" && parsed.expirationDate && parsed.expirationDate < (Date.now() / 1000);
+    if (isDelete) {
+      // logout بإيدك من جوه الموقع: يتنفذ فعلاً - نحذف كل نسخ الكوكي ده من الجرة (بأي صيغة domain/path)
+      stored = stored.filter(c => !(c.name === parsed.name && cookieDomainsRelated(c.domain, parsed.domain)));
+    } else {
+      stored = stored.filter(c => !(c.name === parsed.name && c.domain === parsed.domain && (c.path || "/") === (parsed.path || "/")));
+      stored.push(Object.assign({}, parsed, { expirationDate: extendExpiration(parsed.expirationDate) }));
+    }
+    try { await g.browser.storage.local.set({ [key]: stored }); } catch(e){}
+  }
+
   async function saveSetCookieToJar(setCookieValue, requestDomain, containerId) {
     if (!setCookieValue || !requestDomain || !containerId) return;
     const parsed = parseSetCookie(setCookieValue);
     if (!parsed) return;
     // If domain not in cookie, use requestDomain
     if (!parsed.domain) parsed.domain = requestDomain;
-    const key = getCookieJarKey(containerId, parsed.domain);
-    let stored;
-    try {
-      const data = await g.browser.storage.local.get({ [key]: [] });
-      stored = data[key] || [];
-    } catch(e){ stored = []; }
-    // Remove existing same name+domain+path
-    stored = stored.filter(c => !(c.name === parsed.name && c.domain === parsed.domain && c.path === parsed.path));
-    // If value empty and expires in past, treat as deletion - don't add
-    if (parsed.value === "" && parsed.expirationDate && parsed.expirationDate < Date.now()/1000) {
-      // just removed
-    } else {
-      stored.push(parsed);
-    }
-    try { await g.browser.storage.local.set({ [key]: stored }); } catch(e){}
-    // Also store under requestDomain for fallback lookup
-    if (parsed.domain !== requestDomain) {
-      const key2 = getCookieJarKey(containerId, requestDomain);
-      try {
-        const data2 = await g.browser.storage.local.get({ [key2]: [] });
-        let stored2 = data2[key2] || [];
-        stored2 = stored2.filter(c => !(c.name === parsed.name && c.domain === parsed.domain && c.path === parsed.path));
-        if (!(parsed.value === "" && parsed.expirationDate && parsed.expirationDate < Date.now()/1000)) stored2.push(parsed);
-        await g.browser.storage.local.set({ [key2]: stored2 });
-      } catch(e){}
+    const base1 = getBaseDomain(parsed.domain) || parsed.domain;
+    const base2 = getBaseDomain(requestDomain) || requestDomain;
+    await upsertCookieIntoJar(containerId, parsed.domain, parsed);
+    // Also store under requestDomain for fallback lookup (لو base domain مختلف)
+    if (base1 !== base2) {
+      await upsertCookieIntoJar(containerId, requestDomain, parsed);
     }
   }
 
@@ -659,49 +736,55 @@
     } catch(e){}
   }
 
+  // يرجع true لو الكوكيز الحية اتغيرت فعلاً (استرجاع أو مسح) - عشان الـ auto-reload مرة واحدة
+  // كل swaps لنفس الدومين متسلسلة بقفل - مستحيل تتداخل (أقفلنا ثقب التسابق)
   async function swapCookiesForNavigation(tabId, url, targetContainerId) {
-    if (!cookieIsolationEnabled) return;
+    if (!cookieIsolationEnabled) return false;
     const domain = getDomainFromUrl(url);
-    if (!domain) return;
+    if (!domain) return false;
     const base = getBaseDomain(domain) || domain;
-    const currentOwner = domainOwner.get(base);
-    if (currentOwner === targetContainerId) return; // already correct
-    // Save current browser cookies to previous owner (or to default if first time)
-    if (currentOwner) {
-      await saveCurrentCookiesToJar(currentOwner, domain);
-    } else {
-      // No previous owner tracked (fresh worker or first visit) -> browser cookies belong to default (العادي)
-      // Save them to default jar so المتصفح العادي لا يخرج من حسابه
-      try {
-        const existing = await getAllCookiesForDomain(domain);
-        if (existing.length) {
-          // Only save to default if we are moving away from default to a container
-          // Avoid overwriting default jar with container cookies (already handled above)
-          const defaultKey = getCookieJarKey(DEFAULT_CONTAINER_COOKIE_ID, domain);
-          const data = await g.browser.storage.local.get({ [defaultKey]: null });
-          if (!data[defaultKey] || data[defaultKey].length === 0) {
-            await saveCurrentCookiesToJar(DEFAULT_CONTAINER_COOKIE_ID, domain);
-            console.log(`Saved ${existing.length} cookies to default jar for ${base}`);
+    try { await domainOwnerReady; } catch(e){}
+    return withDomainLock(base, async () => {
+      const currentOwner = domainOwner.get(base);
+      if (currentOwner === targetContainerId) return false; // already correct
+      // Save current browser cookies to previous owner (or to default if first time)
+      if (currentOwner) {
+        await saveCurrentCookiesToJar(currentOwner, domain);
+      } else {
+        // No previous owner tracked (fresh worker or first visit) -> browser cookies belong to default (العادي)
+        // Save them to default jar so المتصفح العادي لا يخرج من حسابه
+        try {
+          const existing = await getAllCookiesForDomain(domain);
+          if (existing.length) {
+            // Only save to default if we are moving away from default to a container
+            // Avoid overwriting default jar with container cookies (already handled above)
+            const defaultKey = getCookieJarKey(DEFAULT_CONTAINER_COOKIE_ID, domain);
+            const data = await g.browser.storage.local.get({ [defaultKey]: null });
+            if (!data[defaultKey] || data[defaultKey].length === 0) {
+              await saveCurrentCookiesToJar(DEFAULT_CONTAINER_COOKIE_ID, domain);
+              console.log(`Saved ${existing.length} cookies to default jar for ${base}`);
+            }
           }
-        }
-      } catch(e){}
-    }
-    // Restore target's jar — but for default, if its jar empty we keep browser as is (لا نمسح العادي)
-    if (targetContainerId === DEFAULT_CONTAINER_COOKIE_ID) {
-      const defaultKey = getCookieJarKey(DEFAULT_CONTAINER_COOKIE_ID, domain);
-      let stored;
-      try { const d = await g.browser.storage.local.get(defaultKey); stored = d[defaultKey]; } catch(e){}
-      if (!stored || !stored.length) {
-        // Default has no saved jar yet (أول مرة) -> لا نمسح، خلّي كوكيز المتصفح العادي كما هي
-        domainOwner.set(base, targetContainerId);
-        await persistDomainOwner();
-        return;
+        } catch(e){}
       }
-    }
-    await restoreCookiesFromJar(targetContainerId, domain);
-    domainOwner.set(base, targetContainerId);
-    await persistDomainOwner();
-    // Also handle www. variant if needed? Already covered by domain matching
+      // Restore target's jar — but for default, if its jar empty we keep browser as is (لا نمسح العادي)
+      if (targetContainerId === DEFAULT_CONTAINER_COOKIE_ID) {
+        const defaultKey = getCookieJarKey(DEFAULT_CONTAINER_COOKIE_ID, domain);
+        let stored;
+        try { const d = await g.browser.storage.local.get(defaultKey); stored = d[defaultKey]; } catch(e){}
+        if (!stored || !stored.length) {
+          // Default has no saved jar yet (أول مرة) -> لا نمسح، خلّي كوكيز المتصفح العادي كما هي
+          domainOwner.set(base, targetContainerId);
+          await persistDomainOwner();
+          return false;
+        }
+      }
+      const res = await restoreCookiesFromJar(targetContainerId, domain);
+      domainOwner.set(base, targetContainerId);
+      await persistDomainOwner();
+      return (res.restored + res.cleared) > 0;
+      // Also handle www. variant if needed? Already covered by domain matching
+    });
   }
 
   function installCookieIsolation() {
@@ -739,7 +822,9 @@
           if (details.frameId !== 0) return;
           try {
             const containerId = await getTabContainer(details.tabId);
-            await swapCookiesForNavigation(details.tabId, details.url, containerId);
+            const changed = await swapCookiesForNavigation(details.tabId, details.url, containerId);
+            // لو الاسترجاع غيّر الكوكيز فعلاً والصفحة كانت اتحملت بكوكيز غلط -> reload مرة واحدة
+            if (changed) maybeAutoReloadAfterRestore(details.tabId, details.url);
           } catch(e) {}
         });
       }
@@ -751,7 +836,8 @@
         if (!changeInfo.url) return;
         try {
           const containerId = await getTabContainer(tabId);
-          await swapCookiesForNavigation(tabId, changeInfo.url, containerId);
+          const changed = await swapCookiesForNavigation(tabId, changeInfo.url, containerId);
+          if (changed) maybeAutoReloadAfterRestore(tabId, changeInfo.url);
         } catch(e){}
       });
       }
@@ -1086,6 +1172,7 @@
     if (tabsApi.onRemoved) {
       tabsApi.onRemoved.addListener((tabId) => {
         clearTabContainer(tabId);
+        purgeReloadGuardsForTab(tabId);
       });
     }
     if (tabsApi.onCreated) {
